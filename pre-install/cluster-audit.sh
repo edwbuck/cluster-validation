@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
-# jbenninghoff 2013-Oct-06  vi: set ai et sw=3 tabstop=3:
+# edwbuck 2020-MAY-18  vi: set ai et sw=3 tabstop=3:
 # shellcheck disable=SC2162,SC2086,SC2046,SC2016
 #set -o nounset errexit
 
-usage() {
+DBG="";
+group=all;
+cluser=""
+
+function print_help() {
 cat << EOF
 Usage: $0 -g -d -l -s <mapr-service-acct-name>
 -g To specify clush group other than "all"
@@ -23,17 +27,52 @@ Use -l mapr for example if mapr account has passwordless sudo rights.
 EOF
 }
 
-# Handle script options
-DBG=""; group=all; cluser=""
-while getopts "dl:g:s:" opt; do
-  case $opt in
-    d) DBG=true ;;
-    g) group=$OPTARG ;;
-    l) cluser="-l $OPTARG" ;;
-    s) srvid="$OPTARG" ;;
-    \?) usage; exit ;;
-  esac
-done
+function parse_options() {
+    while (($#));
+    do
+        case $1 in
+            -h|--help)
+                print_help
+                exit 0
+                ;;
+            -d)
+                export DBG=true
+                ;;
+            -g)
+                export group=$2
+                shift 2
+                ;;
+            -l)
+                export cluser="-l $2"
+                shift 2
+                ;;
+            -s)
+                export srvid=$2
+                shift 2
+                ;;
+            --)
+                shift
+                break
+                ;;
+            *)
+                echo "Unknown option $1."
+                print_help
+                exit 35
+                ;;
+        esac
+    done
+}
+
+SHORTOPTS="dg:l:s:h"
+LONGOPTS="help,"
+OPTS=$(getopt -u --options $SHORTOPTS --longoptions $LONGOPTS -- "$@")
+if [[ $? -ne 0 ]];
+then
+    print_help
+    exit 1
+fi
+parse_options $OPTS
+
 [ -n "$DBG" ] && set -x
 
 # Set some global variables
