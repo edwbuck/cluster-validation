@@ -24,6 +24,10 @@ function log_no_newline() {
     echo -ne "$@" | sed -r "s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//g" >> ${LOG_FILE_PATH}
 }
 
+function log_file() {
+    echo "$@" >> ${LOG_FILE_PATH}
+}
+
 function log_red() {
     log "${COLOR_RED}$@${COLOR_RESET}"
 }

@@ -6,7 +6,10 @@
 
 set -a # export all the variable assignments in this file.
 
-SELF=$(readlink -nf $0)
+export PRODUCT="MapR"
+export SKU="Enterprise"
+export VERSION="6.1.0"
+export BUILDNUMBER=0001
 
 DBG="";
 group=all;
@@ -19,13 +22,14 @@ export SCRIPT_NAME=$(basename ${SELF})
 export VBASE_DIR=$(dirname ${SELF})
 
 function print_help() {
+    echo ""
     echo "Usage: ${SCRIPT_NAME} [options]"
     echo ""
     echo "Options:"
     echo "            -h/--help : Display this help and exit."
     echo "  -o/--logfile <file> : Place the log output into <file>."
     echo "     -g <clush-group> : Use the clush group <clush-gropu>."
-    echo "                   -d : Enable debug logging."
+    echo "         -v/--verbose : Enable verbose logging."
     echo "      -l <clush-user> : Use the clush uer <clush-user>."
     echo " -s <service-account> : Use the service account <service-account>."
     echo ""
@@ -48,8 +52,9 @@ function parse_options() {
                 print_help
                 exit 0
                 ;;
-            -d)
-                export DBG=true
+            -v|--verbose)
+                export VERBOSE=true
+                shift
                 ;;
             -g)
                 export group=$2
@@ -80,8 +85,8 @@ function parse_options() {
     done
 }
 
-SHORTOPTS="dg:l:s:ho:"
-LONGOPTS="help,logfile:,"
+SHORTOPTS="g:hl:o:s:v"
+LONGOPTS="help,logfile:,verbose,"
 OPTS=$(getopt -u --options $SHORTOPTS --longoptions $LONGOPTS -- "$@")
 if [[ $? -ne 0 ]];
 then
@@ -92,7 +97,9 @@ parse_options $OPTS
 
 source ${VBASE_DIR}/logging.sh
 
-[ -n "$DBG" ] && set -x
+echo
+log "Cluster Audit checks for ${PRODUCT} ${SKU} ${VERSION}"
+log_file "Build number: ${BUILDNUMBER}"
 
 # Set some global variables
 printf -v sep '#%.0s' {1..80} #Set sep to 80 # chars
@@ -142,9 +149,8 @@ else
    clush() { eval "$@"; } #clush becomes no-op, all commands run locally doing a single node inspection
    #clush() { for h in $(<~/host.list); do; ssh $h $@; done; } #ssh in for loop
 fi
-if [[ -n "$DBG" ]]; then
-   clush $parg $parg1 ${parg3/0 /} date || { echo clush failed; usage; exit 3; }
-fi
+
+clush $parg $parg1 ${parg3/0 /} date || { log_error "clush failed"; usage; exit 3; }
 
 # Locate or guess MapR Service Account
 if [[ -f /opt/mapr/conf/daemon.conf ]]; then
@@ -200,8 +206,11 @@ case $distro in
    ;;
 esac
 
-[ -n "$DBG" ] && { echo sysd: $sysd; echo srvid: $srvid; echo SUDO: $SUDO; echo parg: $parg; echo node: $node; }
-[ -n "$DBG" ] && exit
+log_verbose "sysd: $sysd"
+log_verbose "srvid: $srvid"
+log_verbose "SUDO: $SUDO"
+log_verbose "parg: $parg"
+log_verbose "node: $node"
 
 
 echo;echo "#################### Hardware audits ###############################"
