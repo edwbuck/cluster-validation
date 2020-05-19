@@ -1,30 +1,43 @@
 #!/usr/bin/env bash
-# edwbuck 2020-MAY-18  vi: set ai et sw=3 tabstop=3:
+# jbenninghoff 2020-MAY-18  vi: set ai et sw=3 tabstop=3:
+# edwbuck 2020-MAY-18
 # shellcheck disable=SC2162,SC2086,SC2046,SC2016
 #set -o nounset errexit
+
+set -a # export all the variable assignments in this file.
+
+SELF=$(readlink -nf $0)
 
 DBG="";
 group=all;
 cluser=""
 
+export LOG_FILE_PATH="/tmp/mr_prechecks.$$.log"
+
+SELF=$(readlink -nf $0)
+export SCRIPT_NAME=$(basename ${SELF})
+export VBASE_DIR=$(dirname ${SELF})
+
 function print_help() {
-cat << EOF
-Usage: $0 -g -d -l -s <mapr-service-acct-name>
--g To specify clush group other than "all"
--d To enable debug output
--l To specify clush/ssh user other than $USER
--s To specify a service account name other than "mapr"
-
-This script is a sequence of parallel shell commands probing for
-current system configuration and highlighting differences between
-the nodes in a cluster.
-
-The script requires that the clush utility (a parallel ssh tool)
-be installed and configured using passwordless ssh connectivity for root to
-all the nodes under test.  Or passwordless sudo for a non-root account.
-Use -l mapr for example if mapr account has passwordless sudo rights.
-
-EOF
+    echo "Usage: ${SCRIPT_NAME} [options]"
+    echo ""
+    echo "Options:"
+    echo "            -h/--help : Display this help and exit."
+    echo "  -o/--logfile <file> : Place the log output into <file>."
+    echo "     -g <clush-group> : Use the clush group <clush-gropu>."
+    echo "                   -d : Enable debug logging."
+    echo "      -l <clush-user> : Use the clush uer <clush-user>."
+    echo " -s <service-account> : Use the service account <service-account>."
+    echo ""
+    echo "This script is a sequence of parallel shell commands probing for"
+    echo "current system configuration and highlighting differences between"
+    echo "the nodes in a cluster."
+    echo ""
+    echo "The script requires that the clush utility (a parallel ssh tool)"
+    echo "be installed and configured using passwordless ssh connectivity for root to"
+    echo "all the nodes under test.  Or passwordless sudo for a non-root account."
+    echo "Use -l mapr for example if mapr account has passwordless sudo rights."
+    echo ""
 }
 
 function parse_options() {
@@ -46,6 +59,10 @@ function parse_options() {
                 export cluser="-l $2"
                 shift 2
                 ;;
+            -o|--logfile)
+                export LOG_FILE_PATH=$2
+                shift 2
+                ;;
             -s)
                 export srvid=$2
                 shift 2
@@ -63,8 +80,8 @@ function parse_options() {
     done
 }
 
-SHORTOPTS="dg:l:s:h"
-LONGOPTS="help,"
+SHORTOPTS="dg:l:s:h0:"
+LONGOPTS="help,output:,"
 OPTS=$(getopt -u --options $SHORTOPTS --longoptions $LONGOPTS -- "$@")
 if [[ $? -ne 0 ]];
 then
@@ -72,6 +89,8 @@ then
     exit 1
 fi
 parse_options $OPTS
+
+source ${VBASE_DIR}/logging.sh
 
 [ -n "$DBG" ] && set -x
 
