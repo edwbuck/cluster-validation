@@ -80,8 +80,8 @@ function parse_options() {
     done
 }
 
-SHORTOPTS="dg:l:s:h0:"
-LONGOPTS="help,output:,"
+SHORTOPTS="dg:l:s:ho:"
+LONGOPTS="help,logfile:,"
 OPTS=$(getopt -u --options $SHORTOPTS --longoptions $LONGOPTS -- "$@")
 if [[ $? -ne 0 ]];
 then
