@@ -10,6 +10,7 @@ export PRODUCT="MapR"
 export SKU="Enterprise"
 export VERSION="6.1.0"
 export BUILDNUMBER=0001
+export NODES=""
 
 DBG="";
 group=all;
@@ -64,6 +65,10 @@ function parse_options() {
                 export cluser="-l $2"
                 shift 2
                 ;;
+            -n|--nodes)
+                export NODE_LINE=$2
+                shift 2
+                ;;
             -o|--logfile)
                 export LOG_FILE_PATH=$2
                 shift 2
@@ -83,10 +88,24 @@ function parse_options() {
                 ;;
         esac
     done
+
+    # expand nodes
+    NODE_ARRAY=()
+    IFS=',' read -ra NODE_PARTS <<< "${NODE_LINE}"
+    for NODE_PART in ${NODE_PARTS[@]};
+    do
+        EXPANSION=$(eval echo $(echo $NODE_PART | sed -e 's/\[\([^]\[-]\+\)-\([^]\[-]\+\)\]/{\1..\2}/g'))
+        for NODE_EXPANSION in ${EXPANSION};
+        do
+            NODE_ARRAY+=(${NODE_EXPANSION})
+        done
+    done
+    echo "NODE_ARRAY= ${NODE_ARRAY[*]}"
+    NODES="${NODE_ARRAY[*]}"
 }
 
-SHORTOPTS="g:hl:o:s:v"
-LONGOPTS="help,logfile:,verbose,"
+SHORTOPTS="g:hl:n:o:s:v"
+LONGOPTS="help,logfile:,nodes:,verbose,"
 OPTS=$(getopt -u --options $SHORTOPTS --longoptions $LONGOPTS -- "$@")
 if [[ $? -ne 0 ]];
 then
@@ -95,18 +114,32 @@ then
 fi
 parse_options $OPTS
 
+rm -f ${LOG_FILE_PATH}
 source ${VBASE_DIR}/logging.sh
+
+log "NODES=${NODES}"
+
+function audit_system() {
+    AUDIT_GROUPS=$(ls ${VBASE_DIR}/*-audits.sh 2>/dev/null | xargs)
+    for AUDIT_GROUP in ${AUDIT_GROUPS};
+    do
+        log ""
+        log_file "*** BEGIN: ${AUDIT_GROUP} ***"
+        bash ${AUDIT_GROUP}
+        log_file "*** END: ${AUDIT_GROUP} ***"
+    done
+}
 
 echo
 log "Cluster Audit checks for ${PRODUCT} ${SKU} ${VERSION}"
 log_file "Build number: ${BUILDNUMBER}"
 
+audit_system
+
 # Set some global variables
 printf -v sep '#%.0s' {1..80} #Set sep to 80 # chars
-#eval printf -v "'#%.0s'" {1..${COLUMNS:-80}}
-linuxs="-e ubuntu -e redhat -e 'red hat' -e centos -e sles"
 if [[ -f /etc/*release ]]; then
-   distro=$(cat /etc/*release |& grep -m1 -i -o "$linuxs") || distro=centos
+   distro=$(cat /etc/*release |& grep -m1 -i -o "-e ubuntu -e redhat -e 'red had' -e centos -e sles'") || distro=centos
 else
    distro=centos
 fi
