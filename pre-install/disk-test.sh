@@ -1,11 +1,12 @@
 #!/bin/bash
 # jbenninghoff 2013-Jan-06  vi: set ai et sw=3 tabstop=3:
+# ebuck 2020-Sep-09 vi: set ai et sw=3 tabstop=3:
 # shellcheck disable=SC2086,SC2162,SC2016
 
 # Absolute path to this script dir which contains iozone binary
 scriptdir="$(cd "$(dirname "$0")" ||exit; pwd -P)"
 
-usage() {
+function print_help() {
 cat << EOF
 
 This script uses iozone to measure disk and disk controller bandwidth.
@@ -29,42 +30,41 @@ Options:
 -z: Specify test size in Gigabytes (default is 4 (4GB), quick test)
 -r: Run read-only dd based test
 -p: Use previously existing /tmp/disk.list file
--d: Enable debug statements
+-v: Enable verbose logging
 
 EOF
-exit
 }
 
-testtype=none; diskset=unused; seq=false; size=4; preserve=false; DBG=''
-while getopts "pasdrz:-:" opt; do
+testtype=none; diskset=unused; seq=false; size=4; preserve=false; VERBOSE=''
+while getopts "hpasvrz:-:" opt; do
   case $opt in
     -) case "$OPTARG" in
          all) diskset=all ;; #Show all disks, not just umounted/unused disks
          destroy) testtype=destroy ;; #Run iozone on all unused disks
-         *) echo "Invalid option --$OPTARG" >&2; usage ;;
+         *) echo "Invalid option --$OPTARG" >&2; print_help; exit 35;;
        esac;;
+    h) print_help; exit 0; ;;
     a) diskset=all ;;
     s) seq=true ;;
     r) testtype=readtest ;;
     p) preserve=true ;;
     z) [[ "$OPTARG" =~ ^[0-9.]+$ ]] && size=$OPTARG
        [[ "$OPTARG" =~ ^[0-9.]+$ ]] || { echo $OPTARG is not a number;exit; } ;;
-    d) DBG=true ;; # Enable debug statements
-    *) usage ;;
+    v) VERBOSE=true ;; # Enable debug statements
+    *) print_help; exit 35 ;;
   esac
 #TBD: add disk detail option, -i
 done
-[[ -n "$DBG" ]] && echo Options set: diskset: $diskset, seq: $seq, size: $size 
-[[ -n "$DBG" ]] && read -p "Press enter to continue or ctrl-c to abort"
+[[ -n "$VERBOSE" ]] && echo Options set: diskset: $diskset, seq: $seq, size: $size 
+[[ -n "$VERBOSE" ]] && read -p "Press enter to continue or ctrl-c to abort"
 
 [[ $(id -u) != 0 ]] && { echo This script must be run as root; exit 1; }
 
 find_unused_disks() {
-   [[ -n "$DBG" ]] && set -x
    disklist=""
    fdisks=$(fdisk -l |& awk '/^Disk .* bytes/{print $2}' |sort)
    for d in $fdisks; do
-      [[ -n "$DBG" ]] && echo Fdisk list loop, Checking Device: $dev
+      [[ -n "$VERBOSE" ]] && echo Fdisk list loop, Checking Device: $dev
       dev=${d%:} # Strip colon off the dev path string
       # If mounted, skip device
       mount | grep -q -w -e $dev -e ${dev}1 -e ${dev}2 && continue
@@ -98,7 +98,7 @@ find_unused_disks() {
    done
 
    #Remove devices used by LVM or mounted partitions
-   [[ -n "$DBG" ]] && echo LVM checks
+   [[ -n "$VERBOSE" ]] && echo LVM checks
    awkcmd='$2=="lvm" {print "/dev/"$3; print "/dev/mapper/"$1}; '
    awkcmd+=' $2=="part" {print "/dev/"$3; print "/dev/"$1}'
    lvmdisks=$(lsblk -ln -o NAME,TYPE,PKNAME,MOUNTPOINT |awk "$awkcmd" |sort -u)
@@ -110,7 +110,7 @@ find_unused_disks() {
    # Remove /dev/mapper duplicates from $disklist
    for i in $disklist; do
       [[ "$i" != /dev/mapper* ]] && continue
-      [[ -n "$DBG" ]] && echo Disk is mapper: $i
+      [[ -n "$VERBOSE" ]] && echo Disk is mapper: $i
       #/dev/mapper underlying device
       dupdev=$(lsblk |grep -B2 "$(basename $i)" |awk '/disk/{print "/dev/"$1}')
       #strip underlying device used by mapper from disklist
@@ -121,15 +121,15 @@ find_unused_disks() {
    # Remove /dev/secvm/dev duplicates from $disklist (Vormetric)
    for i in $disklist; do
       [[ "$i" != /dev/secvm/dev/* ]] && continue
-      [[ -n "$DBG" ]] && echo Disk is Vormetric: $i
+      [[ -n "$VERBOSE" ]] && echo Disk is Vormetric: $i
       #/dev/secvm/dev underlying device
       dupdev=$(lsblk |grep -B2 "$(basename $i)" |awk '/disk/{print "/dev/"$1}')
       #strip underlying device used by secvm(Vormetric) from disklist
       disklist=${disklist/$dupdev }
       #disklist=${disklist/$i } #strip secvm(Vormetric) device
    done
-   [[ -n "$DBG" ]] && { set +x; echo DiskList: $disklist; }
-   [[ -n "$DBG" ]] && read -p "Press enter to continue or ctrl-c to abort"
+   [[ -n "$VERBOSE" ]] && { set +x; echo DiskList: $disklist; }
+   [[ -n "$VERBOSE" ]] && read -p "Press enter to continue or ctrl-c to abort"
 }
 
 # Report on unused or all disks found
@@ -149,8 +149,8 @@ case "$diskset" in
          # Log the disk list for mapr-install.sh
          echo $disklist | tr ' ' '\n' >/tmp/disk.list
       fi
-      [[ -n "$DBG" ]] && cat /tmp/disk.list
-      [[ -n "$DBG" ]] && read -p "Press enter to continue or ctrl-c to abort"
+      [[ -n "$VERBOSE" ]] && cat /tmp/disk.list
+      [[ -n "$VERBOSE" ]] && read -p "Press enter to continue or ctrl-c to abort"
       if [[ -n "$disklist" ]]; then
          echo; echo "Unused disks: $disklist"
          [[ -t 1 ]] && { tput -S <<< $'setab 3\nsetaf 0'; }
@@ -179,11 +179,11 @@ esac
 # Run read-only or read-write (destructive) tests
 case "$testtype" in
    readtest)
-      [[ -n "$DBG" ]] && set -x
+      [[ -n "$VERBOSE" ]] && set -x
       #read-only dd test, possible even after MFS is in place
       ddopts="of=/dev/null iflag=direct bs=1M count=$((size*1000))"
       if [[ $seq == "false" ]]; then
-         [[ -n "$DBG" ]] && echo Concurrent dd disklist: $disklist
+         [[ -n "$VERBOSE" ]] && echo Concurrent dd disklist: $disklist
          for i in $disklist; do
             dd if=$i $ddopts |& tee "$(basename $i)-dd.log" &
          done
@@ -199,7 +199,7 @@ case "$testtype" in
       for i in $disklist; do grep -H MB/s "$(basename $i)*-dd.log"; done
       ;;
    destroy)
-      [[ -n "$DBG" ]] && set -x
+      [[ -n "$VERBOSE" ]] && set -x
       if service mapr-warden status; then
          echo 'MapR warden appears to be running'
          echo 'Stop warden (e.g. service mapr-warden stop)'
