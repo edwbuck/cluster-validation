@@ -5,22 +5,16 @@
 #set -o nounset errexit
 
 set -a # export all the variable assignments in this file.
+export SUPPORTED_DISTROS=( rhel sles ubuntu )
 
-export PRODUCT="MapR"
-export SKU="Enterprise"
-export VERSION="6.1.0"
-export BUILDNUMBER=0001
-export NODES=""
+CALLED_AS=$_
+PROCESS_STATUS=$(ps -o stat= -p $PPID)
+export CALLED_AS
+export PROCESS_STATUS
 
-DBG="";
-group=all;
-cluser=""
-
-export LOG_FILE_PATH="/tmp/mr_prechecks.$$.log"
-
-SELF=$(readlink -nf $0)
-export SCRIPT_NAME=$(basename ${SELF})
-export VBASE_DIR=$(dirname ${SELF})
+SELF=$(readlink -nf "$0")
+export SCRIPT_NAME=$(basename "${SELF}")
+export SCRIPT_DIR=$(dirname "${SELF}")
 
 function print_help() {
     echo ""
@@ -44,6 +38,38 @@ function print_help() {
     echo "Use -l mapr for example if mapr account has passwordless sudo rights."
     echo ""
 }
+
+#check for distro, works on RHEL,CENTOS,Debian,Ubuntu,Mint,SuSE
+DISTRO_ID=$(awk 'BEGIN { FS="=" } $1=="ID" { gsub(/"/, "", $2); print $2 }' /etc/os-release)
+DISTRO_ID_LIKE=( $(awk 'BEGIN { FS="=" } $1=="ID_LIKE" { gsub(/"/, "", $2); print $2 }' /etc/os-release) )
+if [[ " ${SUPPORTED_DISTROS[@]} " == *" DISTRO_ID "* ]]
+then
+  EFFECTIVE_DISTRO=${DISTRO_ID}
+else
+  for SIMILAR_DISTRO in "${DISTRO_ID_LIKE[@]}"
+  do
+    if [[ " ${SUPPORTED_DISTROS[@]} " == *" $SIMILAR_DISTRO "* ]]
+    then
+      EFFECTIVE_DISTRO=${SIMILAR_DISTRO}
+      break
+    fi
+  done
+fi
+
+echo Distro = $DISTRO_ID, effective distro = $EFFECTIVE_DISTRO
+
+export PRODUCT="MapR"
+export SKU="Enterprise"
+export VERSION="6.1.0"
+export BUILDNUMBER=0001
+export NODES=""
+
+DBG="";
+group=all;
+cluser=""
+
+export LOG_FILE_PATH="/tmp/mr_prechecks.$$.log"
+
 
 function parse_options() {
     while (($#));
@@ -115,12 +141,12 @@ fi
 parse_options $OPTS
 
 rm -f ${LOG_FILE_PATH}
-source ${VBASE_DIR}/logging.sh
+source ${SCRIPT_DIR}/logging.sh
 
 log "NODES=${NODES}"
 
 function audit_system() {
-    AUDIT_GROUPS=$(ls ${VBASE_DIR}/*-audits.sh 2>/dev/null | xargs)
+    AUDIT_GROUPS=$(ls ${SCRIPT_DIR}/*-audits.sh 2>/dev/null | xargs)
     for AUDIT_GROUP in ${AUDIT_GROUPS};
     do
         log ""
@@ -138,15 +164,7 @@ audit_system
 
 # Set some global variables
 printf -v sep '#%.0s' {1..80} #Set sep to 80 # chars
-if [[ -f /etc/*release ]]; then
-   distro=$(cat /etc/*release |& grep -m1 -i -o "-e ubuntu -e redhat -e 'red had' -e centos -e sles'") || distro=centos
-else
-   distro=centos
-fi
-distro=${distro,,} #make lowercase
 [[ "$(uname -s)" == "Darwin" ]] && alias sed=gsed
-#distro=$(lsb_release -is | tr [[:upper:]] [[:lower:]])
-#Turn the BOKS chatter down
 export BOKS_SUDO_NO_WARNINGS=1
 
 # Check for clush and provide alt if not found
@@ -218,7 +236,7 @@ fi
 clcmd="[ -f /etc/systemd/system.conf ]"
 sysd=$(clush $parg4 "$clcmd" && echo true || echo false)
 rpms="pciutils dmidecode net-tools ethtool "
-case $distro in
+case $EFFECTIVE_DISTRO in
    redhat|centos|red*|sles)
    rpms+="bind-utils "
    if ! clush $parg $parg1 "rpm -q $rpms >/dev/null"; then
@@ -287,14 +305,14 @@ echo $sep
 #./MegaCli64 -cfgeachdskraid0 WT RA cached NoCachedBadBBU –strpsz256 -a0
 clush $parg "echo 'Storage Controller: '; ${SUDO:-} lspci | grep -i -e ide -e raid -e storage -e lsi"; echo $sep
 clush $parg "echo 'SCSI RAID devices in dmesg: '; ${SUDO:-} dmesg | grep -i raid | grep -i -o 'scsi.*$' |uniq"; echo $sep
-case $distro in
+case $EFFECTIVE_DISTRO in
    ubuntu)
    clush $parg "${SUDO:-} fdisk -l | grep '^Disk /.*:' |sort"; echo $sep
    ;;
-   redhat|centos|red*|sles)
+   rhel|sles)
    clush $parg "echo 'Block Devices: '; lsblk -id -o NAME,SIZE,TYPE,MOUNTPOINT |grep -v ^sr0 |uniq -c -f1 |sed '1s/  1/Qty/'"; echo $sep
    ;;
-   *) echo Unknown Linux distro! $distro; exit ;;
+   *) echo Unknown Linux EFFECTIVE_DISTRO! $DISTRO_ID; exit ;;
 esac
 #TBD: add smartctl disk detail probes
 # smartctl -d megaraid,0 -a /dev/sdf | grep -e ^Vendor -e ^Product -e Capacity -e ^Rotation -e ^Form -e ^Transport
@@ -311,7 +329,7 @@ clush $parg "uname -srvmo | fmt"; echo $sep
 clush $parg "echo Time Sync Check: ; date"; echo $sep
 
 echo Hostname IP addresses
-if [[ "$distro" != "sles" ]]; then
+if [[ "$EFFECTIVE_DISTRO" != "sles" ]]; then
    clush ${parg/-b /} 'hostname -I'; echo $sep
 else
    clush ${parg/-b /} 'hostname -i'; echo $sep
@@ -321,7 +339,7 @@ clush ${parg/-b /} 'host $(hostname -f)'; echo $sep
 echo Reverse DNS lookup
 clush ${parg/-b /} 'host $(hostname -i)'; echo $sep
 
-case $distro in
+case $EFFECTIVE_DISTRO in
    ubuntu)
       # Ubuntu SElinux tools not so good.
       clush $parg "echo 'NTP status '; ${SUDO:-} service ntpd status"; echo $sep
@@ -332,8 +350,8 @@ case $distro in
       clush $parg "echo 'IPtables status: '; ${SUDO:-} iptables -L | head -10"; echo $sep
       clush $parg "echo 'NFS packages installed '; dpkg -l '*nfs*' | grep ^i"; echo $sep
    ;;
-   redhat|centos|red*|sles)
-      if [[ "$distro" == "sles" ]]; then
+   rhel|sles)
+      if [[ "$EFFECTIVE_DISTRO" == "sles" ]]; then
          clush $parg 'echo "MapR Repos Check "; zypper repos | grep -i mapr && zypper -q info mapr-core mapr-spark mapr-patch';echo $sep
          clush $parg "echo -n 'SElinux status: '; rpm -q selinux-tools selinux-policy" ; echo $sep
          clush $parg "${SUDO:-} service SuSEfirewall2_init status"; echo $sep
@@ -377,7 +395,7 @@ case $distro in
          ;;
       esac
    ;;
-   *) echo Unknown Linux distro! $distro; exit ;;
+   *) echo Unknown Linux EFFECTIVE_DISTRO! $DISTRO_ID; exit ;;
       #clush $parg 'echo "MapR Repos Check "; zypper repos |grep -i mapr && yum -q info mapr-core mapr-spark mapr-patch';echo $sep
 esac
 
@@ -415,7 +433,7 @@ esac
 
 echo Java Version
 clush $parg $parg2 'java -version || echo See java-post-install.sh'
-if [[ "$distro" != "sles" ]]; then
+if [[ "$EFFECTIVE_DISTRO" != "sles" ]]; then
    clush $parg $parg2 'yum list installed \*jdk\* \*java\*'
 else
    clush $parg $parg2 'zypper search -i java jdk'

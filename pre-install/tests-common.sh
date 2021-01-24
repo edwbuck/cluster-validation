@@ -1,8 +1,8 @@
 #!/bin/env bash
 
-[[ ! -n ${VBASE_DIR} ]] && { echo "VBASE_DIR unset, exiting now"; exit 1; }
+[[ ! -n ${SCRIPT_DIR} ]] && { echo "SCRIPT_DIR unset, exiting now"; exit 1; }
 
-source ${VBASE_DIR}/logging.sh
+source ${SCRIPT_DIR}/logging.sh
 
 TEST_GROUP_NAMES=()
 TEST_GROUP_FAILURES=()

@@ -1,9 +1,9 @@
 #!/bin/env bash
 
-[[ ! -n ${VBASE_DIR} ]] && { echo "VBASE_DIR unset, exiting now"; exit 1; }
+[[ ! -n ${SCRIPT_DIR} ]] && { echo "SCRIPT_DIR unset, exiting now"; exit 1; }
 [[ ! -n ${NODES} ]] && { echo "NODES unset, exiting now"; exit 1; }
 
-source ${VBASE_DIR}/tests-common.sh
+source ${SCRIPT_DIR}/tests-common.sh
 
 function validate_root_access() {
     test_group "validate root access"
