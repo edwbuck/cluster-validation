@@ -57,6 +57,15 @@ else
 fi
 
 echo Distro = $DISTRO_ID, effective distro = $EFFECTIVE_DISTRO
+if [[ -z ${EFFECTIVE_DISTRO} ]]
+then
+  echo "unsupported distr ${DISTRO_ID}"
+  exit -1
+fi
+
+# Reduce chatter on BOKS managed Sudo
+BOKS_SUDO_NO_WARNINGS=1
+export BOKS_SUDO_NO_WARNINGS
 
 export PRODUCT="MapR"
 export SKU="Enterprise"
@@ -75,43 +84,15 @@ function parse_options() {
     while (($#));
     do
         case $1 in
-            -h|--help)
-                print_help
-                exit 0
-                ;;
-            -v|--verbose)
-                export VERBOSE=true
-                shift
-                ;;
-            -g)
-                export group=$2
-                shift 2
-                ;;
-            -l)
-                export cluser="-l $2"
-                shift 2
-                ;;
-            -n|--nodes)
-                export NODE_LINE=$2
-                shift 2
-                ;;
-            -o|--logfile)
-                export LOG_FILE_PATH=$2
-                shift 2
-                ;;
-            -s)
-                export srvid=$2
-                shift 2
-                ;;
-            --)
-                shift
-                break
-                ;;
-            *)
-                echo "Unknown option $1."
-                print_help
-                exit 35
-                ;;
+            -h|--help)    print_help;              exit  0 ;;
+            -v|--verbose) export VERBOSE=true;     shift 1 ;;
+            -g)           export group=$2;         shift 2 ;;
+            -l)           export cluser="-l $2";   shift 2 ;;
+            -n|--nodes)   export NODE_LINE=$2;     shift 2 ;;
+            -o|--logfile) export LOG_FILE_PATH=$2; shift 2 ;;
+            -s)           export srvid=$2;         shift 2 ;;
+            --)           shift;                   break   ;;
+            *)            echo "Unknown option $1."; print_help; exit 35 ;;
         esac
     done
 
@@ -165,7 +146,6 @@ audit_system
 # Set some global variables
 printf -v sep '#%.0s' {1..80} #Set sep to 80 # chars
 [[ "$(uname -s)" == "Darwin" ]] && alias sed=gsed
-export BOKS_SUDO_NO_WARNINGS=1
 
 # Check for clush and provide alt if not found
 if type clush >& /dev/null; then
