@@ -1,9 +1,22 @@
 #!/bin/bash
 # jbenninghoff 2013-Mar-20  vi: set ai et sw=3 tabstop=3:
+# edwbuck 2020-MAY-18
 # shellcheck disable=SC2029,SC2046,SC2086,SC2181,SC2162
 # ,SC2016
 #TBD: Handle mapruid install
 
+CALLED_AS=$_
+PROCESS_STATUS=$(ps -o stat= -p $PPID)
+export CALLED_AS
+export PROCESS_STATUS
+
+SELF=$(readlink -nf "$0")
+export SCRIPT_NAME=$(basename "${SELF}")
+export SCRIPT_DIR=$(dirname "${SELF}")
+
+source $(dirname ${SCRIPT_DIR})/.distro.sh
+
+function print_help() {
 usage() {
 cat << EOF
 

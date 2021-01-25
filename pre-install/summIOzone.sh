@@ -1,7 +1,20 @@
 #!/bin/bash
 # updated to work with AWS
 # 20171020 R.Itäpuro initialize valsum variable to get correct CV values
+# edwbuck 2020-MAY-18
 
+CALLED_AS=$_
+PROCESS_STATUS=$(ps -o stat= -p $PPID)
+export CALLED_AS
+export PROCESS_STATUS
+
+SELF=$(readlink -nf "$0")
+export SCRIPT_NAME=$(basename "${SELF}")
+export SCRIPT_DIR=$(dirname "${SELF}")
+
+source $(dirname ${SCRIPT_DIR})/.distro.sh
+
+# Run Stream benchmark or mem latency benchmark
 usage() {
 cat << EOF
 

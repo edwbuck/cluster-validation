@@ -3,8 +3,16 @@
 # ebuck 2020-Sep-09 vi: set ai et sw=3 tabstop=3:
 # shellcheck disable=SC2086,SC2162,SC2016
 
-# Absolute path to this script dir which contains iozone binary
-scriptdir="$(cd "$(dirname "$0")" ||exit; pwd -P)"
+CALLED_AS=$_
+PROCESS_STATUS=$(ps -o stat= -p $PPID)
+export CALLED_AS
+export PROCESS_STATUS
+
+SELF=$(readlink -nf "$0")
+export SCRIPT_NAME=$(basename "${SELF}")
+export SCRIPT_DIR=$(dirname "${SELF}")
+
+source $(dirname ${SCRIPT_DIR})/.distro.sh
 
 function print_help() {
 cat << EOF
@@ -221,14 +229,14 @@ case "$testtype" in
       if [[ $seq == "false" ]]; then # Benchmark all disks concurrently
          for disk in $disklist; do
             iozlog=$(basename $disk)-iozone.log
-            $scriptdir/iozone $iozopts -f $disk > $iozlog &
+            ${SCRIPT_DIR}/iozone $iozopts -f $disk > $iozlog &
             sleep 2 #Some disk controllers lockup without a delay
          done
          echo; echo "Waiting for iozone to finish"; wait; echo
       else # Sequence through the disk list, one by one
          for disk in $disklist; do
             iozlog=$(basename $disk)-seq-iozone.log
-            $scriptdir/iozone $iozopts -f $disk > $iozlog
+            ${SCRIPT_DIR}/iozone $iozopts -f $disk > $iozlog
          done
          echo; echo "IOzone sequential testing done"; echo
       fi

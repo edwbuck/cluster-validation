@@ -1,6 +1,19 @@
 #!/bin/bash
 # jbenninghoff 2013-Mar-20  vi: set ai et sw=3 tabstop=3:
+# edwbuck 2020-MAY-18
 
+CALLED_AS=$_
+PROCESS_STATUS=$(ps -o stat= -p $PPID)
+export CALLED_AS
+export PROCESS_STATUS
+
+SELF=$(readlink -nf "$0")
+export SCRIPT_NAME=$(basename "${SELF}")
+export SCRIPT_DIR=$(dirname "${SELF}")
+
+source $(dirname ${SCRIPT_DIR})/.distro.sh
+
+function print_help() {
 grep ^all /etc/clustershell/groups || { echo clustershell group: all undefined; exit 1; }
 grep ^jt /etc/clustershell/groups || { echo clustershell group: jt undefined; exit 1; }
 grep ^zkcldb /etc/clustershell/groups || { echo clustershell group: zkcldb undefined; exit 1; }

@@ -5,7 +5,6 @@
 #set -o nounset errexit
 
 set -a # export all the variable assignments in this file.
-export SUPPORTED_DISTROS=( rhel sles ubuntu )
 
 CALLED_AS=$_
 PROCESS_STATUS=$(ps -o stat= -p $PPID)
@@ -15,6 +14,8 @@ export PROCESS_STATUS
 SELF=$(readlink -nf "$0")
 export SCRIPT_NAME=$(basename "${SELF}")
 export SCRIPT_DIR=$(dirname "${SELF}")
+
+source $(dirname ${SCRIPT_DIR})/.distro.sh
 
 function print_help() {
     echo ""
@@ -39,29 +40,6 @@ function print_help() {
     echo ""
 }
 
-#check for distro, works on RHEL,CENTOS,Debian,Ubuntu,Mint,SuSE
-DISTRO_ID=$(awk 'BEGIN { FS="=" } $1=="ID" { gsub(/"/, "", $2); print $2 }' /etc/os-release)
-DISTRO_ID_LIKE=( $(awk 'BEGIN { FS="=" } $1=="ID_LIKE" { gsub(/"/, "", $2); print $2 }' /etc/os-release) )
-if [[ " ${SUPPORTED_DISTROS[@]} " == *" DISTRO_ID "* ]]
-then
-  EFFECTIVE_DISTRO=${DISTRO_ID}
-else
-  for SIMILAR_DISTRO in "${DISTRO_ID_LIKE[@]}"
-  do
-    if [[ " ${SUPPORTED_DISTROS[@]} " == *" $SIMILAR_DISTRO "* ]]
-    then
-      EFFECTIVE_DISTRO=${SIMILAR_DISTRO}
-      break
-    fi
-  done
-fi
-
-echo Distro = $DISTRO_ID, effective distro = $EFFECTIVE_DISTRO
-if [[ -z ${EFFECTIVE_DISTRO} ]]
-then
-  echo "unsupported distr ${DISTRO_ID}"
-  exit -1
-fi
 
 # Reduce chatter on BOKS managed Sudo
 BOKS_SUDO_NO_WARNINGS=1
